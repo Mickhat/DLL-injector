@@ -8,6 +8,8 @@ This project provides a Python-based tool for injecting DLLs (Dynamic Link Libra
 - Automatically resolve the process name to its PID.
 - Simple command-line interface for easy operation.
 - Error handling for common issues encountered during injection.
+- You can also now download a GUI version on the Release Page [Virustotal](https://www.virustotal.com/gui/file/f36e940df6c319aaf735bb11362b1454e5dbc91a4e624213cf8c39a668adbbfc/detection)
+
 
 ## Requirements
 
