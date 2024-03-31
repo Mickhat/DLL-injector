@@ -1,37 +1,47 @@
-name: Build DLL Injector GUI EXE
+name: Release Application
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r ./QT/requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r ./requirements/requirements.txt
 
-    - name: Build EXE with PyInstaller
-      run: |
-        pip install pyinstaller
-        pyinstaller --onefile --windowed ./QT/dll-injector-gui.py
+      - name: Build EXE with PyInstaller
+        run: |
+          pip install pyinstaller
+          pyinstaller --onefile --windowed ./QT/dll-injector-gui.py
 
-    - name: Upload EXE as Artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: dll-injector-gui-exe
-        path: ./dist/dll-injector-gui.exe
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/dll-injector-gui.exe
+          asset_name: dll-injector-gui.exe
+          asset_content_type: application/octet-stream
