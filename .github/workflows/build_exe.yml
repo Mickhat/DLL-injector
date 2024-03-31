@@ -1,4 +1,4 @@
-name: Release exe
+name: Release Application
 
 on:
   push:
