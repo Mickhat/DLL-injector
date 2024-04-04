@@ -1,8 +1,7 @@
 import sys
 import ctypes
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLineEdit, QLabel, 
-                             QFileDialog, QDialog, QListWidget)
-
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, 
+                             QFileDialog, QDialog, QListWidget, QCheckBox, QTextEdit)
 import psutil
 from pyinjector import inject
 
@@ -23,37 +22,45 @@ class ProcessListDialog(QDialog):
 
     def process_selected(self, item):
         process_info = item.text().split(" (PID: ")
-        process_name = process_info[0]
+        process_name = process_info[0][:-1]  # Remove the trailing ")"
         self.parent().process_name_input.setText(process_name)
         self.accept()
 
 class DLLInjectorGUI(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.settings_file = "dll_paths.txt"
         if not self.is_admin():
             self.request_admin()
             sys.exit()
         
         self.setWindowTitle('DLL Injector GUI')
-        self.setGeometry(100, 100, 320, 250)
+        self.setGeometry(100, 100, 320, 300)  # Adjusted for additional UI elements
         self.initUI()
+        self.load_dll_paths()
 
     def initUI(self):
         layout = QVBoxLayout()
 
         self.process_name_label = QLabel('Process Name:')
-        self.process_name_input = QLineEdit()
+        self.process_name_input = QTextEdit()
+        self.process_name_input.setText("metin2client.exe")
+        self.process_name_input.setPlaceholderText("Enter process name here")
+        self.process_name_input.setMaximumHeight(30)
 
         self.select_process_button = QPushButton('Select Process')
         self.select_process_button.clicked.connect(self.openProcessListDialog)
 
-        self.dll_path_label = QLabel('DLL Path:')
-        self.dll_path_input = QLineEdit()
+        self.dll_path_label = QLabel('DLL Path(s):')
+        self.dll_path_input = QTextEdit()
+        self.dll_path_input.setPlaceholderText("Enter DLL paths, one per line")
 
         self.browse_button = QPushButton('Browse...')
         self.browse_button.clicked.connect(self.openFileDialog)
 
-        self.inject_button = QPushButton('Inject DLL')
+        self.remember_dlls_checkbox = QCheckBox("Remember DLLs")
+        
+        self.inject_button = QPushButton('Inject DLL(s)')
         self.inject_button.clicked.connect(self.onInjectButtonClicked)
 
         self.status_label = QLabel('Status: Awaiting input...')
@@ -64,6 +71,7 @@ class DLLInjectorGUI(QMainWindow):
         layout.addWidget(self.dll_path_label)
         layout.addWidget(self.dll_path_input)
         layout.addWidget(self.browse_button)
+        layout.addWidget(self.remember_dlls_checkbox)
         layout.addWidget(self.inject_button)
         layout.addWidget(self.status_label)
 
@@ -77,30 +85,53 @@ class DLLInjectorGUI(QMainWindow):
 
     def openFileDialog(self):
         options = QFileDialog.Options()
-        dll_path, _ = QFileDialog.getOpenFileName(self, "Select DLL file", "", "DLL Files (*.dll);;All Files (*)", options=options)
-        if dll_path:
-            self.dll_path_input.setText(dll_path)
+        dll_paths, _ = QFileDialog.getOpenFileNames(self, "Select one or more DLL files", "", "DLL Files (*.dll);;All Files (*)", options=options)
+        if dll_paths:
+            self.dll_path_input.setText("\n".join(dll_paths))
+
+    def load_dll_paths(self):
+        try:
+            with open(self.settings_file, "r") as file:
+                dll_paths = file.read().strip()
+                if dll_paths:
+                    self.dll_path_input.setText(dll_paths)
+                    self.remember_dlls_checkbox.setChecked(True)
+        except FileNotFoundError:
+            pass
+
+    def save_dll_paths(self):
+        if self.remember_dlls_checkbox.isChecked():
+            paths = self.dll_path_input.toPlainText().strip()
+            with open(self.settings_file, "w") as file:
+                file.write(paths)
+        else:
+            with open(self.settings_file, "w") as file:
+                file.write("")  # Clear the stored paths if the checkbox is not checked
 
     def find_process_id(self, process_name):
         for proc in psutil.process_iter(['name', 'pid']):
-            if proc.info['name'] == process_name:
+            if proc.info['name'].lower() == process_name.lower():
                 return proc.info['pid']
         return None
 
-    def inject_dll(self, pid, dll_path):
-        try:
-            inject(pid, dll_path)
-            self.status_label.setText('DLL injected successfully.')
-        except Exception as e:
-            self.status_label.setText(f'Failed to inject DLL: {e}')
+    def inject_dll(self, pid, dll_paths_str):
+        dll_paths = dll_paths_str.split('\n')
+        for dll_path in dll_paths:
+            try:
+                inject(pid, dll_path.strip())
+                self.status_label.setText(f'DLL injected successfully: {dll_path.strip()}')
+            except Exception as e:
+                self.status_label.setText(f'Failed to inject DLL: {e}')
+                break  # Stop on the first error
 
     def onInjectButtonClicked(self):
-        process_name = self.process_name_input.text()
-        dll_path = self.dll_path_input.text()
+        process_name = self.process_name_input.toPlainText().strip()
+        dll_paths_str = self.dll_path_input.toPlainText()
         pid = self.find_process_id(process_name)
         if pid:
             self.status_label.setText(f'Found {process_name} with PID: {pid}')
-            self.inject_dll(pid, dll_path)
+            self.inject_dll(pid, dll_paths_str)
+            self.save_dll_paths()
         else:
             self.status_label.setText(f'Could not find process: {process_name}')
 
